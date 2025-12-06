@@ -1,96 +1,88 @@
 """
-実行コマンド：python -m debug.dataset config.yaml
+Quick dataloader/debug script.
+Run: python -m debug.dataset config.yaml
 """
-from omegaconf import OmegaConf
-
+import os
 import sys
+from typing import List
 
-from transformers import  TrOCRProcessor
+import numpy as np
+from omegaconf import OmegaConf
+from PIL import Image
+from tqdm import tqdm
+from transformers import TrOCRProcessor
 
 from utils.dataset import get_dataloader
-
-from tqdm import tqdm
-
-
-
-import os
-import numpy as np
-from PIL import Image
-
-
-
 
 
 def parse_args():
     conf = OmegaConf.load(sys.argv[1])
-
     OmegaConf.set_struct(conf, True)
-
-    sys.argv = [sys.argv[0]] + sys.argv[2:] # Remove the configuration file name from sys.argv
-
+    sys.argv = [sys.argv[0]] + sys.argv[2:]  # remove config file name from argv
     conf.merge_with_cli()
     return conf
 
 
+def to_pil_batch(pixel_values) -> List[Image.Image]:
+    """
+    Convert normalized pixel_values (B,C,H,W) back to PIL images for inspection.
+    Assumes ImageNet normalization mean/std used by TrOCR.
+    """
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    imgs = []
+    pv_cpu = pixel_values.detach().cpu()
+    for pv in pv_cpu:  # (C,H,W)
+        img = pv.permute(1, 2, 0).numpy()
+        img = img * std + mean
+        img = np.clip(img, 0, 1)
+        imgs.append(Image.fromarray((img * 255).astype(np.uint8)))
+    return imgs
 
 
 if __name__ == "__main__":
     config = parse_args()
     os.makedirs(config.debug.save_dir, exist_ok=True)
-    
-    max_epochs = config.train.num_epochs
-    device = config.device    
-    
+
     processor = TrOCRProcessor.from_pretrained(config.model_name)
-    train_loader = get_dataloader(config.data.dummy_images_dir, config.data.dummy_labels_path, processor, batch_size=config.train.batch_size, shuffle=True,num_workers=config.train.num_workers )
-    print("データローダーの内容を確認")
-    for batch in train_loader:
-        print("☆"*20)
-        print(batch)
-        break
-    print("☆"*100)
-    for epoch in range(1,2):
+    train_loader = get_dataloader(
+        config.data.dummy_images_dir,
+        config.data.dummy_labels_path,
+        processor,
+        batch_size=config.train.batch_size,
+        shuffle=True,
+        num_workers=config.train.num_workers,
+    )
+
+    print(f"Dataloader ready: {len(train_loader.dataset)} samples, batch_size={config.train.batch_size}")
+
+    for epoch in range(1, 2):  # one pass is enough for debugging
         pbar = tqdm(enumerate(train_loader, 1), total=len(train_loader), desc=f"Epoch {epoch}")
         for step, batch in pbar:
-            print("----")
-            print("バッチ内のテンソル形状を確認")
-            print(batch)
-            pixel_values = batch["pixel_values"].to(device)
-            labels = batch["labels"].to(device)
-            ids = batch.get("ids",None)
-            
-            pv_batch = pixel_values.detach().cpu() # (B ,C,H,W)
-            B = pv_batch.size(0)
-            saved_count = 0
-            for i in range(B):
-                pv = pv_batch[i]
-                img_mp = pv.permute(1,2,0).numpy()  # (H,W,C)
-                img_pil = Image.fromarray((img_mp * 255).astype(np.uint8))
-                mean = np.array([0.485, 0.456, 0.406])
-                std = np.array([0.229, 0.224, 0.225])
-                img_mp = img_mp * std + mean  # 逆正規化
-                img_mp = np.clip(img_mp, 0, 1)  # 0-1にクリップ
-                img_pil = Image.fromarray((img_mp * 255).astype(np.uint8))
+            pixel_values = batch["pixel_values"]
+            labels = batch["labels"]
+            ids = batch.get("ids", [])
 
+            print("\n--- Batch preview ---")
+            print(f"pixel_values shape: {tuple(pixel_values.shape)}")
+            print(f"labels shape: {tuple(labels.shape)}")
 
-                # ファイル名作成
-                sample_id = ids[i] if ids is not None and i < len(ids) else f"b{step}i{i}"
+            # Decode labels to text for a quick sanity check
+            labels_for_decode = labels.detach().cpu().clone()
+            pad_id = processor.tokenizer.pad_token_id or processor.tokenizer.eos_token_id
+            labels_for_decode[labels_for_decode == -100] = pad_id
+            decoded = processor.tokenizer.batch_decode(labels_for_decode, skip_special_tokens=True)
+            for i, txt in enumerate(decoded[:3]):
+                sample_id = ids[i] if i < len(ids) else f"{step}-{i}"
+                print(f"[{sample_id}] {txt}")
+
+            # Save images for visual inspection
+            imgs = to_pil_batch(pixel_values)
+            for i, img in enumerate(imgs):
+                sample_id = ids[i] if i < len(ids) else f"{step}-{i}"
                 fname = f"ep{epoch:02d}_st{step:04d}_{i:03d}_{sample_id}.png"
-                outpath = os.path.join(config.debug.save_dir, fname)
-                img_pil.save(outpath)
-                saved_count += 1
+                img.save(os.path.join(config.debug.save_dir, fname))
 
-            # ログ更新
-            pbar.set_postfix({"saved_imgs": saved_count})
-            
-            
-            
-            
-            print("pixel_values :", pixel_values)
-            print("pixel_values shape:", pixel_values.shape)
-            
-            print("labels :", labels.shape)
-            print("labels shape:", labels)
-            
+            pbar.set_postfix({"saved_imgs": len(imgs)})
+            # Only first batch is sufficient for debugging
             break
-        break

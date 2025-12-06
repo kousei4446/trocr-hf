@@ -7,11 +7,11 @@ data:
   train_images_dir: 'data/IAM/train/images'
   train_labels_path: 'data/IAM/train/labels.txt'
   val_images_dir: 'data/IAM/val/images'
-  val_labels_path: 'data//IAM/val/labels.txt'
-  test_images_dir: 'data//IAM/test/images'
-  test_labels_path: 'data//IAM/test/labels.txt'
-  dummy_images_dir: 'data//IAM/dummy/images'
-  dummy_labels_path: 'data//IAM/dummy/labels.txt'
+  val_labels_path: 'data/IAM/val/labels.txt'
+  test_images_dir: 'data/IAM/test/images'
+  test_labels_path: 'data/IAM/test/labels.txt'
+  dummy_images_dir: 'data/IAM/dummy/images'
+  dummy_labels_path: 'data/IAM/dummy/labels.txt'
 
 
 # # training
@@ -24,7 +24,7 @@ data:
 
 
 train:
-  num_epochs: 40      # まずは 30〜40 くらいで様子見
+  num_epochs: 40    # まずは 30〜40 くらいで様子見
   batch_size: 4
   num_workers: 4
   lr: 1e-5           # デコーダ用。エンコーダは自動で半分にします

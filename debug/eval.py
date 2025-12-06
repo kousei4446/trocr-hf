@@ -94,7 +94,7 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
 
     # 集計用メトリクス（全体 CER/WER）
     cer_metric = CER()
-    wer_metric = WER(mode='tokenizer')
+    wer_metric = WER(config.eval.wer_mode)
 
     # 生成時のパラメータ（None のものは除外）
     gen_kwargs = {

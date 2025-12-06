@@ -1,191 +1,238 @@
-# 警告を抑制
-import warnings
 import logging
 import os
-
-# 環境変数で Transformers のログを抑制（import前に設定）
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-# Transformers の警告を抑制
-warnings.filterwarnings("ignore", message=".*as_target_tokenizer.*")
-warnings.filterwarnings("ignore", message=".*expandable_segments.*")
-warnings.filterwarnings("ignore", message=".*loss_type=None.*")
-warnings.filterwarnings("ignore", message=".*use_fast.*")
-warnings.filterwarnings("ignore", message=".*Some weights.*not initialized.*")
-warnings.filterwarnings("ignore", message=".*Config of the.*is overwritten.*")
-
-# HuggingFace のロギングレベルを設定
-logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
-logging.getLogger("transformers.configuration_utils").setLevel(logging.ERROR)
-
-
-
-from omegaconf import OmegaConf
-
 import sys
+import warnings
 
 from tqdm import tqdm
 
 import torch
 import torch.nn as nn
 from transformers import VisionEncoderDecoderModel, TrOCRProcessor
+from omegaconf import OmegaConf
 
 from utils.dataset import get_dataloader
-
 from utils.metrics import CER, WER
 from utils.logger import HTRLogger
 
+# Transformers/tokenizers の警告を抑制
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+warnings.filterwarnings("ignore", message=".*as_target_tokenizer.*")
+warnings.filterwarnings("ignore", message=".*expandable_segments.*")
+warnings.filterwarnings("ignore", message=".*loss_type=None.*")
+warnings.filterwarnings("ignore", message=".*use_fast.*")
+warnings.filterwarnings("ignore", message=".*Some weights.*not initialized.*")
+warnings.filterwarnings("ignore", message=".*Config of the.*is overwritten.*")
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+logging.getLogger("transformers.configuration_utils").setLevel(logging.ERROR)
+
+
 def parse_args():
     conf = OmegaConf.load(sys.argv[1])
-
     OmegaConf.set_struct(conf, True)
-
-    sys.argv = [sys.argv[0]] + sys.argv[2:] # Remove the configuration file name from sys.argv
-
+    sys.argv = [sys.argv[0]] + sys.argv[2:]
     conf.merge_with_cli()
     return conf
 
-def evaluate(model, processor, loader, device, id2gt, wer_mode):
+
+def evaluate(model, processor, loader, device, id2gt, wer_mode, desc=None, max_new_tokens=64):
     model.eval()
     cer_metric = CER()
     wer_metric = WER(mode=wer_mode)
+    iterator = tqdm(loader, desc=desc) if desc else loader
+
     with torch.no_grad():
-        for batch in loader:
+        for batch in iterator:
             pixel_values = batch["pixel_values"].to(device)
             gen_kwargs = {
-                "max_new_tokens": 128,
+                "max_new_tokens": max_new_tokens,
                 "num_beams": 1,
                 "pad_token_id": model.config.pad_token_id,
                 "decoder_start_token_id": model.config.decoder_start_token_id,
             }
+            gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None}
             gen_out = model.generate(pixel_values, **gen_kwargs)
             sequences = gen_out.sequences if hasattr(gen_out, "sequences") else gen_out
             sequences = sequences.detach().cpu()
             preds = processor.batch_decode(sequences, skip_special_tokens=True)
 
-            # 事前に作った id->gt 辞書を使う（高速）
+            # 画像IDから正解テキストを取得して評価（debug/eval.py と同じ）
             gts = [id2gt.get(img_id, "") for img_id in batch["ids"]]
 
             for p, g in zip(preds, gts):
                 cer_metric.update(p, g)
                 wer_metric.update(p, g)
-    model.train()
-    return cer_metric.score(), wer_metric.score()         
 
-
-def test(model, processor, test_loader, device, wer_mode):
-    model.eval()
-    cer_metric = CER()
-    wer_metric = WER(mode=wer_mode)
-    with torch.no_grad():
-        for batch in test_loader:
-            pixel_values = batch["pixel_values"].to(device)
-            gen_kwargs = {
-                "max_new_tokens": 128,
-                "num_beams": 1,
-                "pad_token_id": model.config.pad_token_id,
-                "decoder_start_token_id": model.config.decoder_start_token_id,
-            }
-            gen_out = model.generate(pixel_values, **gen_kwargs)
-            sequences = gen_out.sequences if hasattr(gen_out, "sequences") else gen_out
-            sequences = sequences.detach().cpu()
-            preds = processor.batch_decode(sequences, skip_special_tokens=True)
-
-            gts = [batch["labels"][i][batch["labels"][i] != -100].tolist() for i in range(batch["labels"].size(0))]
-            gts = processor.tokenizer.batch_decode(gts, skip_special_tokens=True)
-
-            for p, g in zip(preds, gts):
-                cer_metric.update(p, g)
-                wer_metric.update(p, g)
     model.train()
     return cer_metric.score(), wer_metric.score()
 
-    
 
 def save_model_and_processor(model, processor, optimizer, epoch, out_dir):
     os.makedirs(out_dir, exist_ok=True)
-    # HuggingFace 形式で保存（復元が楽）
     ckpt_dir = os.path.join(out_dir, f"epoch-{epoch}")
     os.makedirs(ckpt_dir, exist_ok=True)
     model.save_pretrained(ckpt_dir)
     processor.save_pretrained(ckpt_dir)
     # optimizer state 保存（再開用）
-    
     torch.save(
-      {"optimizer": optimizer.state_dict(), "epoch": epoch},
-      os.path.join(ckpt_dir, "optim.pt"),
-      _use_new_zipfile_serialization=False
+        {"optimizer": optimizer.state_dict(), "epoch": epoch},
+        os.path.join(ckpt_dir, "optim.pt"),
+        _use_new_zipfile_serialization=False,
     )
     print(f"Saved checkpoint to {ckpt_dir}")
- 
+
 
 if __name__ == "__main__":
     config = parse_args()
+    
     max_epochs = config.train.num_epochs
-    device = config.device    
-    
+    device = config.device if torch.cuda.is_available() else "cpu"
+
     processor = TrOCRProcessor.from_pretrained(config.model_name)
-    train_loader = get_dataloader(config.data.train_images_dir, config.data.train_labels_path, processor, batch_size=config.train.batch_size, shuffle=True,num_workers=config.train.num_workers )
-    val_loader = get_dataloader(config.data.val_images_dir, config.data.val_labels_path, processor, batch_size=config.eval.batch_size, shuffle=False, num_workers=config.eval.num_workers )
-    test_loader = get_dataloader(config.data.test_images_dir, config.data.test_labels_path, processor, batch_size=config.eval.batch_size, shuffle=False, num_workers=config.eval.num_workers)
+    train_loader = get_dataloader(
+        config.data.train_images_dir,
+        config.data.train_labels_path,
+        processor,
+        batch_size=config.train.batch_size,
+        shuffle=True,
+        num_workers=config.train.num_workers,
+    )
+    val_loader = get_dataloader(
+        config.data.val_images_dir,
+        config.data.val_labels_path,
+        processor,
+        batch_size=config.eval.batch_size,
+        shuffle=False,
+        num_workers=config.eval.num_workers,
+    )
+    test_loader = get_dataloader(
+        config.data.test_images_dir,
+        config.data.test_labels_path,
+        processor,
+        batch_size=config.eval.batch_size,
+        shuffle=False,
+        num_workers=config.eval.num_workers,
+    )
+
+    model = VisionEncoderDecoderModel.from_pretrained(config.model_name)
+    # print(model.config)
+    print("pad_token_id:", model.config.pad_token_id)
+    print("decoder_start_token_id:", model.config.decoder_start_token_id)
+    print("bos_token_id:", getattr(model.config, "bos_token_id", None))
+    print("top vocab_size:", getattr(model.config, "vocab_size", None))
+    print("decoder vocab_size:", model.config.decoder.vocab_size)
     
-    model = VisionEncoderDecoderModel.from_pretrained(config.model_name).to(device)
+    print("☆"*100)
+    print("processor tokenizer pad_token_id:", processor.tokenizer.pad_token_id)
+    print("processor tokenizer eos_token_id:", processor.tokenizer.eos_token_id)
+    print("processor tokenizer cls_token_id:", processor.tokenizer.cls_token_id)
+    print("processor tokenizer bos_token_id:", processor.tokenizer.bos_token_id)
     
-      # デコーダの特殊トークンを設定
-    if model.config.decoder_start_token_id is None:
-        model.config.decoder_start_token_id = processor.tokenizer.bos_token_id
-    if model.config.pad_token_id is None:
-        model.config.pad_token_id = processor.tokenizer.pad_token_id
-    if model.config.eos_token_id is None:
-        model.config.eos_token_id = processor.tokenizer.eos_token_id
+    model.config.pad_token_id = 1
+    model.config.eos_token_id = 2
+    model.config.decoder_start_token_id = 2
+
+    model = model.to(device)
+
     
     model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.train.lr,weight_decay=config.train.weight_decay)
-    """"
-        事前に id->gt 辞書を作成（evaluate/test 時の高速化のため）
-            例:                        
-                id2gt = {
-                "001": "the",
-                "002": "quick",
-    """
-    id2gt = {iid: txt for (pth, txt, iid) in val_loader.dataset.samples}
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=config.train.lr,
+        weight_decay=config.train.weight_decay,
+    )
+
+    # 評価用の id->gt 辞書（debug/eval.py と同じ基準で評価するため）
+    id2gt_val = {iid: txt for (_p, txt, iid) in val_loader.dataset.samples}
+    id2gt_test = {iid: txt for (_p, txt, iid) in test_loader.dataset.samples}
     logger = HTRLogger(log_dir=config.logging.log_dir, config=config)
-    
-    cer_test, wer_test = test(model, processor, test_loader, device, wer_mode=config.eval.wer_mode)
+
+    # 学習前ベースライン評価（debug/eval.py と同じ手順）
+    cer_val, wer_val = evaluate(
+        model,
+        processor,
+        val_loader,
+        device,
+        id2gt_val,
+        wer_mode=config.eval.wer_mode,
+        desc="Initial Val",
+    )
+    cer_test, wer_test = evaluate(
+        model,
+        processor,
+        test_loader,
+        device,
+        id2gt_test,
+        wer_mode=config.eval.wer_mode,
+        desc="Initial Test",
+    )
+    print(f"Initial Val CER: {cer_val:.4f}, WER: {wer_val:.4f}")
     print(f"Initial Test CER: {cer_test:.4f}, WER: {wer_test:.4f}")
-    avg_loss = logger.log_test(1, cer_test, wer_test)
-    
-    for epoch in range(1,max_epochs+1):
-        pbar = tqdm(enumerate(train_loader, 1), total=len(train_loader), desc=f"Epoch {epoch}")
+    logger.log_epoch(0, cer_val, wer_val, lr=config.train.lr)
+    logger.log_test(0, cer_test, wer_test)
+
+    for epoch in range(1, max_epochs + 1):
+        pbar = tqdm(
+            enumerate(train_loader, 1),
+            total=len(train_loader),
+            desc=f"Epoch {epoch}",
+        )
         optimizer.zero_grad()
         loss_val = 0.0
         for step, batch in pbar:
             pixel_values = batch["pixel_values"].to(device)
             labels = batch["labels"].to(device)
-            
+
             outputs = model(pixel_values=pixel_values, labels=labels)
             loss = outputs.loss
             loss.backward()
-                        
+
             optimizer.step()
             optimizer.zero_grad()
-            loss_val = loss_val + loss.item()
+            loss_val += loss.item()
             pbar.set_postfix({"loss": f"{(loss_val / step):.4f}"})
             logger.log_step(loss.item(), epoch, step)
-            
-        cer, wer = evaluate(model, processor, val_loader, device, id2gt, wer_mode=config.eval.wer_mode)
+
+        cer, wer = evaluate(
+            model,
+            processor,
+            val_loader,
+            device,
+            id2gt_val,
+            wer_mode=config.eval.wer_mode,
+        )
         print(f"Epoch {epoch} : {cer:.4f}, WER: {wer:.4f}")
-        current_lr = optimizer.param_groups[0]["lr"]  
-        avg_loss = logger.log_epoch(epoch, cer, wer, lr=current_lr)
+        current_lr = optimizer.param_groups[0]["lr"]
+        logger.log_epoch(epoch, cer, wer, lr=current_lr)
         
+        if epoch == 1 :
+                cer_val, wer_val = evaluate(
+                    model,
+                    processor,
+                    val_loader,
+                    device,
+                    id2gt_val,
+                    wer_mode=config.eval.wer_mode,
+                    desc="Initial Val",
+                )
+                print(f"Initial Val CER: {cer_val:.4f}, WER: {wer_val:.4f}")
+                logger.log_epoch(0, cer_val, wer_val, lr=config.train.lr)
+
         if epoch == 20 or epoch == 100:
             save_model_and_processor(model, processor, optimizer, epoch, config.model.save_dir)
-            
+
         if epoch % 10 == 0:
-            cer_test, wer_test = test(model, processor, test_loader, device, wer_mode=config.eval.wer_mode)
+            cer_test, wer_test = evaluate(
+                model,
+                processor,
+                test_loader,
+                device,
+                id2gt_test,
+                wer_mode=config.eval.wer_mode,
+                desc=f"Test epoch {epoch}",
+            )
             print(f"Test CER: {cer_test:.4f}, WER: {wer_test:.4f}")
             logger.log_test(epoch, cer_test, wer_test)
-            
+
     logger.close()
