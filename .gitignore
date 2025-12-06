@@ -6,4 +6,9 @@ __pycache__/
 logs
 models
 
-debug/debug_images/
+data_raw/IAM/forms
+data_raw/IAM/xml
+
+.venv/
+
+.DS_Store

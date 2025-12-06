@@ -20,24 +20,23 @@ TrOCR は Vision Transformer (ViT) をエンコーダー、テキスト生成用
 
 ```
 trocr-hf/
-├── train.py              # 学習スクリプト
-├── config.yaml           # 設定ファイル
-├── requirements.txt      # 依存パッケージ
-├── README.md
+├── train.py                  # 学習スクリプト
+├── train_pro.py              # 追加の学習スクリプト
+├── config.yaml               # 設定ファイル
+├── requirements.txt          # 依存パッケージ
+├── data/                     # 前処理後データ配置先（train/val/test 配下に images, labels.txt）
+├── data_raw/
+│   ├── prepare_iam.py        # IAM 前処理スクリプト（行画像＋labels.txt生成）
+│   └── IAM/                  # ダウンロードした元データ配置 (forms/, xml/, splits/)
 ├── utils/
-│   ├── dataset.py        # データセット・DataLoader
-│   ├── metrics.py        # CER/WER 評価指標
-│   └── logger.py         # TensorBoard ロガー
+│   ├── dataset.py            # データセット・DataLoader
+│   ├── metrics.py            # CER/WER 評価指標
+│   └── logger.py             # TensorBoard ロガー
 ├── debug/
-│   ├── test.py           # 推論テスト（フォルダ単位）
-│   └── dataset.py        # データセット動作確認
-└── data/
-    ├── train/
-    │   ├── images/       # 学習画像
-    │   └── labels.txt    # 学習ラベル
-    └── val/
-        ├── images/       # 検証画像
-        └── labels.txt    # 検証ラベル
+│   ├── test.py               # 推論テスト（フォルダ単位）
+│   └── dataset.py            # データセット動作確認
+├── logs/                     # 学習ログ出力先
+└── models/                   # モデル保存先
 ```
 
 ## インストール
@@ -49,36 +48,43 @@ cd trocr-hf
 
 # 依存パッケージのインストール
 pip install -r requirements.txt
-
-# NLTK データのダウンロード（初回のみ）
-python -c "import nltk; nltk.download('punkt')"
 ```
 
-## データ形式
+## データ準備
 
-### ラベルファイル（labels.txt）
+### IAM データを使う場合
 
-```
-image_id1 テキスト内容1
-image_id2 テキスト内容2
-image_id3 テキスト内容3
-```
+1. IAM 公式サイトで登録し、以下を取得して解凍します（配布物名は公式に準拠）  
+   - フォーム画像: `data/formsA-D.tgz`, `data/formsE-H.tgz`, `data/formsI-Z.tgz` → 共通の `forms/` にまとめて展開（配布元: https://fki.tic.heia-fr.ch/databases/download-the-iam-handwriting-database ）  
+   - XML Ground Truth: `data/xml.tgz` → `xml/` に展開  
+   - 行分割リスト: `train.uttlist`, `validation.uttlist`, `test.uttlist`（本リポジトリでは `data_raw/IAM/splits/` に配置済み）
 
-- 各行: `<画像ID> <テキスト>`（スペース区切り）
-- 画像ID は拡張子なし（例: `img001`）
-- 対応する画像は `images/<画像ID>.png` に配置
+2. ディレクトリ例（リポジトリ配下に置く場合）  
+   ```
+   data_raw/IAM/
+     ├── forms/        # 解凍したフォーム画像 (png)
+     ├── xml/          # 解凍した XML
+     └── splits/       # train/val/test の uttlist
+   ```
 
-### ディレクトリ構成例
+3. 行画像＋`labels.txt` を生成  
+   ```bash
+   python data_raw/prepare_iam.py \
+     ./data_raw/IAM/forms/ \
+     ./data_raw/IAM/xml/ \
+     ./data_raw/IAM/splits/ \
+     ./data/IAM
+   ```
+   - 出力: `./data/IAM/{train,val,test}/images/*.png` と `labels.txt`
+   - `config.yaml` の `data.*` をこの出力パスに合わせて設定
 
-```
-data/train/
-├── images/
-│   ├── img001.png
-│   ├── img002.png
-│   └── ...
-└── labels.txt
-```
+4. 注意点  
+   - 公式配布の行画像は単語単位の背景マスクや欠損行があるため、本スクリプトはフォーム画像＋XMLから行を切り出します。より生のノイズを含む行画像で学習したい場合に有効です。
 
+### 出力データ形式
+
+- 配置: `data/{train,val,test}/images/` に画像、同階層に `labels.txt`
+- `labels.txt` 各行: `<画像ID> <テキスト>`（画像IDは拡張子なし、画像は `images/<画像ID>.png`）
 ## 使用方法
 
 ### 学習
@@ -87,21 +93,6 @@ data/train/
 python train.py config.yaml
 ```
 
-CLI からパラメータを上書き可能:
-
-```bash
-python train.py config.yaml train.lr=5e-5 train.batch_size=16
-```
-
-### 推論テスト
-
-```bash
-# フォルダ内の全画像をテスト
-python debug/test.py data/val/images --model microsoft/trocr-small-handwritten
-
-# 詳細出力
-python debug/test.py data/val/images --model microsoft/trocr-small-handwritten -v
-```
 
 ### TensorBoard でログ確認
 
@@ -109,37 +100,6 @@ python debug/test.py data/val/images --model microsoft/trocr-small-handwritten -
 tensorboard --logdir=logs
 ```
 
-## 設定ファイル（config.yaml）
-
-```yaml
-model_name: 'microsoft/trocr-small-handwritten'
-device: 'cuda'
-
-data:
-  train_images_dir: 'data/train/images'
-  train_labels_path: 'data/train/labels.txt'
-  val_images_dir: 'data/val/images'
-  val_labels_path: 'data/val/labels.txt'
-
-train:
-  num_epochs: 30
-  batch_size: 8
-  num_workers: 4
-  lr: 1e-4
-  weight_decay: 0.00005
-
-eval:
-  batch_size: 8
-  num_workers: 4
-  wer_mode: 'tokenizer'  # 'tokenizer' or 'space'
-
-model:
-  save_dir: './models/saved_models/TOCR-small'
-  save_interval: 10
-
-logging:
-  log_dir: './logs/TOCR-small'
-```
 
 ## 利用可能なモデル
 
@@ -148,8 +108,6 @@ logging:
 | `microsoft/trocr-small-handwritten` | 62M | 手書き文字（軽量） |
 | `microsoft/trocr-base-handwritten` | 334M | 手書き文字（標準） |
 | `microsoft/trocr-large-handwritten` | 558M | 手書き文字（高精度） |
-| `microsoft/trocr-small-printed` | 62M | 印刷文字（軽量） |
-| `microsoft/trocr-base-printed` | 334M | 印刷文字（標準） |
 
 ## 評価指標
 
@@ -163,13 +121,3 @@ logging:
 - Python 3.10+
 - CUDA 11.8+（GPU使用時）
 - PyTorch 2.0+
-
-## 注意事項
-
-- GPU メモリが不足する場合は `batch_size` を小さくしてください
-- Windows で `num_workers > 0` を使用する場合、データセット内に lambda 関数があるとエラーになります
-- 日本語テキストの場合、トークナイザーの調整が必要な場合があります
-
-## ライセンス
-
-MIT License
