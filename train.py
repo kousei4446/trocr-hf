@@ -143,6 +143,13 @@ if __name__ == "__main__":
     
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.train.lr,weight_decay=config.train.weight_decay)
+    """"
+        事前に id->gt 辞書を作成（evaluate/test 時の高速化のため）
+            例:                        
+                id2gt = {
+                "001": "the",
+                "002": "quick",
+    """
     id2gt = {iid: txt for (pth, txt, iid) in val_loader.dataset.samples}
     logger = HTRLogger(log_dir=config.logging.log_dir, config=config)
     

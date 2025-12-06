@@ -142,7 +142,7 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
 
         # サンプル単位の CER/WER を計算（個別保存用）
         sample_cer = CER()
-        sample_wer = WER(mode='tokenizer')
+        sample_wer = WER(config.eval.wer_mode)
         sample_cer.update(decoded, gt_text)
         sample_wer.update(decoded, gt_text)
 
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     
     # 例外を捕捉して見やすく表示
     try:
-        debug_inference_folder(config.data.dummy_image_dir, config.model_name,config.device)
+        debug_inference_folder(config.data.test_images_dir, config.model_name,config.device)
     except Exception as e:
         print("推論デバッグ中にエラーが発生しました:", e)
         raise

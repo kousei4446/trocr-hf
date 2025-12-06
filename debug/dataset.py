@@ -42,7 +42,7 @@ if __name__ == "__main__":
     device = config.device    
     
     processor = TrOCRProcessor.from_pretrained(config.model_name)
-    train_loader = get_dataloader(config.data.dummy_image_dir, config.data.dummy_label_path, processor, batch_size=config.train.batch_size, shuffle=True,num_workers=config.train.num_workers )
+    train_loader = get_dataloader(config.data.dummy_images_dir, config.data.dummy_labels_path, processor, batch_size=config.train.batch_size, shuffle=True,num_workers=config.train.num_workers )
     print("データローダーの内容を確認")
     for batch in train_loader:
         print("☆"*20)

@@ -12,3 +12,5 @@ data_raw/IAM/xml
 .venv/
 
 .DS_Store
+
+debug/debug_images/

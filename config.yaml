@@ -5,13 +5,13 @@ device: 'cuda'
 # datasets
 data:
   train_images_dir: 'data/IAM/train/images'
-  train_labels_path: 'data//IAM/train/labels.txt'
+  train_labels_path: 'data/IAM/train/labels.txt'
   val_images_dir: 'data/IAM/val/images'
   val_labels_path: 'data//IAM/val/labels.txt'
   test_images_dir: 'data//IAM/test/images'
   test_labels_path: 'data//IAM/test/labels.txt'
-  dummy_image_dir: 'data//IAM/dummy/images'
-  dummy_label_path: 'data//IAM/dummy/labels.txt'
+  dummy_images_dir: 'data//IAM/dummy/images'
+  dummy_labels_path: 'data//IAM/dummy/labels.txt'
 
 
 # # training
