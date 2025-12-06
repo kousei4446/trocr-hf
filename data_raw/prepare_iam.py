@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import xml.etree.ElementTree as ET
 from PIL import Image
+import re
 
 def _load_uttlist(path):
     """Read a .uttlist file as a list of IDs, skipping empty or malformed lines."""
@@ -19,6 +20,14 @@ def _load_uttlist(path):
                 continue
             ids.append(parts[0])
     return ids
+
+# 36文字（小文字英数字＋スペース）のみを残す正規化
+_ALLOWED_RE = re.compile(r"[^a-z0-9 ]+")
+def _normalize_label(text: str) -> str:
+    text = text.lower()
+    text = _ALLOWED_RE.sub(" ", text)      # 許可外文字はスペースに
+    text = re.sub(r"\s+", " ", text).strip()  # 連続スペース圧縮＋両端除去
+    return text
 
 
 # main function - read the xml files and prepare the data
@@ -102,6 +111,7 @@ def prepare_iam_data(form_path, xmls_path, splits_path, output_path, pad_size=16
             line_text = line_text.replace("&amp;", "&")
             line_text = line_text.replace("&quot;", "\"")
             line_text = line_text.replace("&apos;", "\'")
+            line_text = _normalize_label(line_text)
 
             gt_lines[subset].append(line_id + " " + line_text + "\n")
             
