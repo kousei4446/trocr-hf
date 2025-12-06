@@ -1,0 +1,24 @@
+# TrOCR Fine-tuning Requirements
+
+# Core ML frameworks
+torch>=2.0.0
+transformers>=4.35.0
+
+# Image processing
+pillow>=10.0.0
+
+# Configuration
+omegaconf>=2.3.0
+
+# Metrics (CER/WER calculation)
+editdistance>=0.6.0
+nltk>=3.8.0
+
+# Logging
+tensorboard>=2.14.0
+
+# Progress bar
+tqdm>=4.66.0
+
+# Tokenizer dependencies (required by transformers)
+sentencepiece>=0.1.99

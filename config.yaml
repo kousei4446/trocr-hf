@@ -1,0 +1,54 @@
+model_name: 'microsoft/trocr-small-handwritten'
+
+device: 'cuda'
+
+# datasets
+data:
+  train_images_dir: 'data/train/images'
+  train_labels_path: 'data/train/labels.txt'
+  val_images_dir: 'data/val/images'
+  val_labels_path: 'data/val/labels.txt'
+  test_images_dir: 'data/test/images'
+  test_labels_path: 'data/test/labels.txt'
+  dummy_image_dir: 'data/dummy/images'
+  dummy_label_path: 'data/dummy/labels.txt'
+
+
+# # training
+# train:
+#   num_epochs: 100
+#   batch_size: 4
+#   num_workers: 4
+#   lr: 1e-5
+#   weight_decay: 0.00005
+
+
+train:
+  num_epochs: 40      # まずは 30〜40 くらいで様子見
+  batch_size: 4
+  num_workers: 4
+  lr: 1e-5           # デコーダ用。エンコーダは自動で半分にします
+  weight_decay: 0.00005
+  patience: 6        # 6 epoch 連続で改善しなければ early stop
+
+
+# evaluation
+eval:
+  batch_size: 8
+  num_workers: 4
+  wer_mode: 'tokenizer' # select from 'tokenizer', 'space'
+
+
+# model saving
+model:
+  save_dir: './models/12-03_TOCR-small'
+  save_interval: 10
+
+# logging
+logging:
+  log_dir: './logs/runs/12-03_TOCR-small'
+
+debug:
+  save_preprocessed: true
+  save_dir: "./debug/debug_images"
+  save_format: "png"        # png or jpg

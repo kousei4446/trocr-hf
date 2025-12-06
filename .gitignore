@@ -1,0 +1,9 @@
+/data
+/output
+# 任意のpythonキャッシュファイルを無視
+__pycache__/
+
+logs
+models
+
+debug/debug_images/
