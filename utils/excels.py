@@ -74,3 +74,74 @@ class DiffHighlighter:
             cell.value = ch
             if flag and ch not in (" ", "　"):
                 cell.font = font_red
+                
+                
+    def write_three_lines_rich(
+        self,
+        workbook,
+        worksheet,
+        row: int,
+        col: int,
+        gt_text: str,
+        pred_base: str,
+        pred_ft: str,
+        mask_gt,
+        mask_base,
+        mask_ft,
+    ):
+        """
+        1セルに
+        GT: xxx
+        BASE: yyy
+        FT: zzz
+        を改行でまとめ、間違い文字だけ赤文字にする
+        """
+        fmt_normal = workbook.add_format({})
+        fmt_red    = workbook.add_format({"font_color": "red", "bold": True})
+        fmt_label  = workbook.add_format({"bold": True})       # 「GT: 」などラベル用
+        fmt_cell   = workbook.add_format({"text_wrap": True})  # セル内改行有効化
+
+        pieces = []
+
+        def add_line(label: str, text: str, mask):
+            # ラベル部分（例: "GT: "）
+            pieces.append(fmt_label)
+            pieces.append(label)
+
+            if not text:
+                # 空文字ならラベルだけで終わり
+                return
+
+            # マスクに従って、連続した文字をまとめてフォーマット付け
+            current_flag = mask[0]
+            buf = []
+
+            for ch, flag in zip(text, mask):
+                if flag == current_flag:
+                    buf.append(ch)
+                else:
+                    fmt = fmt_red if current_flag else fmt_normal
+                    pieces.append(fmt)
+                    pieces.append("".join(buf))
+                    buf = [ch]
+                    current_flag = flag
+
+            # 最後のバッファ
+            if buf:
+                fmt = fmt_red if current_flag else fmt_normal
+                pieces.append(fmt)
+                pieces.append("".join(buf))
+
+        # 1行目 GT
+        add_line("GT: ", gt_text, mask_gt)
+        pieces.append("\n")
+
+        # 2行目 BASE
+        add_line("BS: ", pred_base, mask_base)
+        pieces.append("\n")
+
+        # 3行目 FT（最後は改行なし）
+        add_line("FT: ", pred_ft, mask_ft)
+
+        # 1セルにリッチテキストとして書き込み
+        worksheet.write_rich_string(row, col, *pieces, fmt_cell)

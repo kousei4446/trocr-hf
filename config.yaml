@@ -45,12 +45,12 @@ debug:
   resume: "saved_models/12-07_TOCR-small/epoch-100"
 
 excel:                                                                                                                                                                          
-  images_dir: data/IAM_Aachen/dummy/images                                                                                                                                       
-  labels_path: data/IAM_Aachen/dummy/labels.txt                                                                                                                                  
+  images_dir: data/IAM_Aachen/test/images                                                                                                                                       
+  labels_path: data/IAM_Aachen/test/labels.txt                                                                                                                                  
   ft_ckpt: saved_models/12-07_TOCR-small/epoch-500                                                                                                                              
   baseline: microsoft/trocr-small-handwritten                                                                                                                                   
-  out: debug/excels/aaaa.xlsx                                                                                                                                                       
-  image_exts: .png,.jpg,.jpeg                                                                                                                                                   
+  out: debug/excels/results.xlsx                                                                                                                                                       
+  image_exts: .jpg                                                                                                                                                  
   max_new_tokens: 64                                                                                                                                                            
   device: cuda                                                                                                                                                                  
   max_samples: null                                                                                                                                                             
