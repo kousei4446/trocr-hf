@@ -1,24 +1,30 @@
-# TrOCR Fine-tuning Requirements
+# TrOCR ファインチューニング用の依存パッケージ
 
-# Core ML frameworks
+# ML フレームワーク
 torch>=2.0.0
 transformers>=4.35.0
 
-# Image processing
+# 画像処理
 pillow>=10.0.0
 
-# Configuration
+# 設定管理
 omegaconf>=2.3.0
 
-# Metrics (CER/WER calculation)
+# メトリクス（CER/WER 計算）
 editdistance>=0.6.0
 nltk>=3.8.0
 
-# Logging
+# ロギング
 tensorboard>=2.14.0
 
-# Progress bar
+# プログレスバー
 tqdm>=4.66.0
 
-# Tokenizer dependencies (required by transformers)
+# トークナイザー依存パッケージ（transformers 必須）
 sentencepiece>=0.1.99
+
+# Excel ファイル操作
+openpyxl>=3.0.0
+
+# Excel 画像貼り付け用
+xlsxwriter>=3.1.0

@@ -4,13 +4,18 @@
 __pycache__/
 
 logs
-models
+saved_models
 
 data_raw/IAM/forms
 data_raw/IAM/xml
+
+data_raw/IAM_Aachen/images
+data_raw/IAM_384/images
+
 
 .venv/
 
 .DS_Store
 
-debug/debug_images/
+debug/images/
+debug/excels/

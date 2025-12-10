@@ -169,7 +169,7 @@ def collate_fn(batch: List[Dict[str, Any]], processor, max_target_length: int = 
 
 
 def get_dataloader(images_dir: str, labels_txt: str, processor, batch_size: int = 8, shuffle: bool = True,
-                   num_workers: int = 4, max_target_length: int = 128) -> DataLoader:
+                   num_workers: int = 4, max_target_length: int = 128, image_ext: str = ".png") -> DataLoader:
     """
     学習/評価用DataLoaderを生成
 
@@ -185,7 +185,7 @@ def get_dataloader(images_dir: str, labels_txt: str, processor, batch_size: int 
     Returns:
         DataLoader: 設定済みのDataLoader
     """
-    ds = IAMDataset(images_dir, labels_txt, normalize_fn=None)
+    ds = IAMDataset(images_dir, labels_txt, normalize_fn=None, image_ext=image_ext)
     return DataLoader(
         ds,
         batch_size=batch_size,

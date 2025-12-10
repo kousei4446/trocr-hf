@@ -1,54 +1,57 @@
-model_name: 'microsoft/trocr-small-handwritten'
+model_name: 'microsoft/trocr-base-handwritten'
 
 device: 'cuda'
 
 # datasets
 data:
-  train_images_dir: 'data/IAM/train/images'
-  train_labels_path: 'data/IAM/train/labels.txt'
-  val_images_dir: 'data/IAM/val/images'
-  val_labels_path: 'data/IAM/val/labels.txt'
-  test_images_dir: 'data/IAM/test/images'
-  test_labels_path: 'data/IAM/test/labels.txt'
-  dummy_images_dir: 'data/IAM/dummy/images'
-  dummy_labels_path: 'data/IAM/dummy/labels.txt'
-
-
-# # training
-# train:
-#   num_epochs: 100
-#   batch_size: 4
-#   num_workers: 4
-#   lr: 1e-5
-#   weight_decay: 0.00005
+  train_images_dir: 'data/IAM_Aachen/train/images'
+  train_labels_path: 'data/IAM_Aachen/train/labels.txt'
+  val_images_dir: 'data/IAM_Aachen/val/images'
+  val_labels_path: 'data/IAM_Aachen/val/labels.txt'
+  test_images_dir: 'data/IAM_Aachen/test/images'
+  test_labels_path: 'data/IAM_Aachen/test/labels.txt'
+  dummy_images_dir: 'data/IAM_Aachen/dummy/images'
+  dummy_labels_path: 'data/IAM_Aachen/dummy/labels.txt'
+  image_ext: '.jpg'
 
 
 train:
-  num_epochs: 40    # まずは 30〜40 くらいで様子見
+  num_epochs: 10
   batch_size: 4
   num_workers: 4
-  lr: 1e-5           # デコーダ用。エンコーダは自動で半分にします
+  lr: 1e-5           
   weight_decay: 0.00005
-  patience: 6        # 6 epoch 連続で改善しなければ early stop
-
 
 # evaluation
 eval:
   batch_size: 8
   num_workers: 4
-  wer_mode: 'tokenizer' # select from 'tokenizer', 'space'
 
 
 # model saving
 model:
-  save_dir: './models/12-03_TOCR-small'
+  save_dir: './saved_models/12-07_TOCR-small'
   save_interval: 10
 
 # logging
 logging:
-  log_dir: './logs/runs/12-03_TOCR-small'
+  log_dir: './logs/runs/12-07_TOCR-small'
 
 debug:
   save_preprocessed: true
-  save_dir: "./debug/debug_images"
-  save_format: "png"        # png or jpg
+  save_dir: "./debug/images/images"
+  save_format: "png"
+  save_excel: "./debug/images/results.xlsx"
+  resume: "saved_models/12-07_TOCR-small/epoch-100"
+
+excel:                                                                                                                                                                          
+  images_dir: data/IAM_Aachen/dummy/images                                                                                                                                       
+  labels_path: data/IAM_Aachen/dummy/labels.txt                                                                                                                                  
+  ft_ckpt: saved_models/12-07_TOCR-small/epoch-500                                                                                                                              
+  baseline: microsoft/trocr-small-handwritten                                                                                                                                   
+  out: debug/excels/aaaa.xlsx                                                                                                                                                       
+  image_exts: .png,.jpg,.jpeg                                                                                                                                                   
+  max_new_tokens: 64                                                                                                                                                            
+  device: cuda                                                                                                                                                                  
+  max_samples: null                                                                                                                                                             
+  embed_images: true  

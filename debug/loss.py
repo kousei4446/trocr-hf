@@ -36,6 +36,21 @@ def parse_args():
     return conf
 
 
+
+def _load_labels_dict(labels_path: str) -> dict:
+    """labels.txt ? {image_id: text} ???????????"""
+    mapping = {}
+    with open(labels_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 1)
+            image_id = parts[0]
+            text = parts[1] if len(parts) > 1 else ""
+            mapping[image_id] = text
+    return mapping
+
 def evaluate(model, processor, loader, device, id2gt, desc=None, max_new_tokens=64):
     model.eval()
     cer_metric = CER(normalize_fn=lambda t: normalize_36_charset(t, keep_space=False))
@@ -65,19 +80,6 @@ def evaluate(model, processor, loader, device, id2gt, desc=None, max_new_tokens=
     return cer_metric.score()
 
 
-def save_model_and_processor(model, processor, optimizer, epoch, out_dir):
-    os.makedirs(out_dir, exist_ok=True)
-    ckpt_dir = os.path.join(out_dir, f"epoch-{epoch}")
-    os.makedirs(ckpt_dir, exist_ok=True)
-    model.save_pretrained(ckpt_dir)
-    processor.save_pretrained(ckpt_dir)
-    torch.save(
-        {"optimizer": optimizer.state_dict(), "epoch": epoch},
-        os.path.join(ckpt_dir, "optim.pt"),
-        _use_new_zipfile_serialization=False,
-    )
-    print(f"Saved checkpoint to {ckpt_dir}")
-
 
 if __name__ == "__main__":
     config = parse_args()
@@ -96,6 +98,7 @@ if __name__ == "__main__":
         num_workers=config.train.num_workers,
         image_ext=image_ext,
     )
+    
     val_loader = get_dataloader(
         config.data.val_images_dir,
         config.data.val_labels_path,
@@ -105,34 +108,30 @@ if __name__ == "__main__":
         num_workers=config.eval.num_workers,
         image_ext=image_ext,
     )
-    test_loader = get_dataloader(
-        config.data.test_images_dir,
-        config.data.test_labels_path,
-        processor,
-        batch_size=config.eval.batch_size,
-        shuffle=False,
-        num_workers=config.eval.num_workers,
-        image_ext=image_ext,
-    )
+    val_id2gt = _load_labels_dict(config.data.val_labels_path)
+    eval_max_new_tokens = getattr(getattr(config, "eval", {}), "max_new_tokens", 64)
 
     model = VisionEncoderDecoderModel.from_pretrained(config.model_name)
     
     # ===== 全パラメータ凍結 =====
     for p in model.parameters():
         p.requires_grad = False
+
+    # ===== ViT encoder 最終層だけ解凍 =====
     last_encoder_layer = model.encoder.encoder.layer[-1]
     for p in last_encoder_layer.parameters():
         p.requires_grad = True
-    decoder_core = model.decoder.model.decoder  # TrOCRDecoder                                            
-    for layer in decoder_core.layers[-2:]:      # 例: 後ろ2層                                             
+    decoder_core = model.decoder.model.decoder  
+    for layer in decoder_core.layers[-2:]:                                             
         for p in layer.parameters():                                                                      
             p.requires_grad = True   
-            
+
     model.config.pad_token_id = 1
     model.config.eos_token_id = 2
     model.config.decoder_start_token_id = 2
     model = model.to(device)
 
+        
     model.train()
     
     optimizer = torch.optim.AdamW(
@@ -141,21 +140,8 @@ if __name__ == "__main__":
         weight_decay=config.train.weight_decay,
     )
 
-    # 評価用の id->gt 辞書
-    id2gt_val = {iid: txt for (_p, txt, iid) in val_loader.dataset.samples}
-    id2gt_test = {iid: txt for (_p, txt, iid) in test_loader.dataset.samples}
-    logger = HTRLogger(log_dir=config.logging.log_dir, config=config)
-    cer_test = evaluate(
-        model,
-        processor,
-        test_loader,
-        device,
-        id2gt_test,
-        desc=f"Test epoch {0}",
-    )
-    print(f"Test CER: {cer_test:.4f}")
-    logger.log_test(0, cer_test)
-        
+
+    
     for epoch in range(1, max_epochs + 1):
         pbar = tqdm(
             enumerate(train_loader, 1),
@@ -169,9 +155,13 @@ if __name__ == "__main__":
             labels = batch["labels"].to(device)
 
             outputs = model(pixel_values=pixel_values, labels=labels)
-            
             logits = outputs.logits
+            loss = outputs.loss
+            
             vocab_size = logits.size(-1)
+            
+            loss_builtin = outputs.loss
+
             
             loss = F.cross_entropy(
                 # 予測された“各文字位置 × 語彙数”の生のスコア（logits）
@@ -181,29 +171,38 @@ if __name__ == "__main__":
                 ignore_index=-100,
             )
             
-
+            print((loss - loss_builtin).abs().item())
+            
             loss.backward()
+            print(f"loss item: {loss.item()/step}")
+            print(logits.view(-1, vocab_size))
+            print(labels.view(-1))
+            
 
             optimizer.step()
             optimizer.zero_grad()
             loss_val += loss.item()
             pbar.set_postfix({"loss": f"{(loss_val / step):.4f}"})
-            logger.log_step(loss.item(), epoch, step)
+            if epoch == 1:
+                break
             
+        # ---- validation CER ----
+        cer = evaluate(
+            model,
+            processor,
+            val_loader,
+            device,
+            val_id2gt,
+            desc=f"Val CER (epoch {epoch})",
+            max_new_tokens=eval_max_new_tokens,
+        )
+        print(f"[epoch {epoch}] val CER: {cer:.4f}")
+        
+        model.eval()
+        
+        outputs = model(pixel_values=pixel_values, labels=labels)
+        
+        
 
-        if epoch % 20 == 0:
-            save_model_and_processor(model, processor, optimizer, epoch, config.model.save_dir)
-
-        if epoch % 10 == 0 :
-            cer_test = evaluate(
-                model,
-                processor,
-                test_loader,
-                device,
-                id2gt_test,
-                desc=f"Test epoch {epoch}",
-            )
-            print(f"Test CER: {cer_test:.4f}")
-            logger.log_test(epoch, cer_test)
-
-    logger.close()
+        if epoch == 1:
+            break  

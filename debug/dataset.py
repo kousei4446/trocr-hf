@@ -17,7 +17,8 @@ from utils.dataset import get_dataloader
 
 def parse_args():
     conf = OmegaConf.load(sys.argv[1])
-    OmegaConf.set_struct(conf, True)
+    # allow optional dummy_* keys
+    OmegaConf.set_struct(conf, False)
     sys.argv = [sys.argv[0]] + sys.argv[2:]  # remove config file name from argv
     conf.merge_with_cli()
     return conf
@@ -45,13 +46,22 @@ if __name__ == "__main__":
     os.makedirs(config.debug.save_dir, exist_ok=True)
 
     processor = TrOCRProcessor.from_pretrained(config.model_name)
+
+    # use dummy if provided, otherwise fall back to train
+    images_dir = config.data.get("dummy_images_dir", config.data.train_images_dir)
+    labels_path = config.data.get("dummy_labels_path", config.data.train_labels_path)
+
+    # デフォルト拡張子は .png。dummy が .jpg の場合は config.data.image_ext で上書き可能。
+    image_ext = config.data.get("image_ext", ".png")
+
     train_loader = get_dataloader(
-        config.data.dummy_images_dir,
-        config.data.dummy_labels_path,
+        images_dir,
+        labels_path,
         processor,
         batch_size=config.train.batch_size,
         shuffle=True,
         num_workers=config.train.num_workers,
+        image_ext=image_ext,
     )
 
     print(f"Dataloader ready: {len(train_loader.dataset)} samples, batch_size={config.train.batch_size}")

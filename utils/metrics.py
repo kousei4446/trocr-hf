@@ -1,55 +1,48 @@
+import re
+
 import editdistance
 
 import nltk
-# quiet=True でダウンロードメッセージを抑制
-nltk.download('punkt', quiet=True)
-nltk.download('punkt_tab', quiet=True)
+# quiet=True 縺ｧ繝繧ｦ繝ｳ繝ｭ繝ｼ繝峨Γ繝・そ繝ｼ繧ｸ繧呈椛蛻ｶ
+nltk.download("punkt", quiet=True)
+nltk.download("punkt_tab", quiet=True)
 from nltk.tokenize import word_tokenize
 
-# character error rate
+
+def normalize_36_charset(text: str, keep_space: bool = False) -> str:
+    """
+    IAM の 36 文字（小文字英数字＋スペース）のみを残す正規化。
+    keep_space=False にするとスペースも除外して全て連結する。
+    """
+    allowed = "abcdefghijklmnopqrstuvwxyz0123456789" + (" " if keep_space else "")
+    pattern = re.compile(f"[^{re.escape(allowed)}]+")
+
+    text = text.lower()
+    text = pattern.sub(" ", text if keep_space else text.replace(" ", ""))
+    text = re.sub(r"\s+", " ", text).strip() if keep_space else text.strip()
+    return text
+
+
 class CER:
-    def __init__(self):
-        self.total_dist = 0
-        self.total_len = 0
-        
-    def update(self, prediction, target):            
-        dist = float(editdistance.eval(prediction, target))
-        self.total_dist += dist
-        self.total_len += len(target)
+    """Character Error Rate"""
 
-    def score(self):
-        return self.total_dist / self.total_len
-
-    def reset(self):
+    def __init__(self, normalize_fn=None):
         self.total_dist = 0
         self.total_len = 0
-   
-# word error rate     
-# two supported modes: tokenizer & space
-class WER:
-    def __init__(self, mode='tokenizer'):
-        self.total_dist = 0
-        self.total_len = 0
+        self.normalize_fn = normalize_fn or (lambda x: x)
         
-        if mode not in ['tokenizer', 'space']:
-            raise ValueError('mode must be either "tokenizer" or "space"')
-        
-        self.mode = mode
-    
     def update(self, prediction, target):
-        if self.mode == 'tokenizer':
-            target = word_tokenize(target)
-            prediction = word_tokenize(prediction)
-        elif self.mode == 'space':
-            target = target.split(' ')
-            prediction = prediction.split(' ')
-        
+        prediction = self.normalize_fn(prediction)
+        target = self.normalize_fn(target)
+        # skip empty targets to avoid zero-length divisions
+        if len(target) == 0:
+            return
         dist = float(editdistance.eval(prediction, target))
         self.total_dist += dist
         self.total_len += len(target)
-        
+
     def score(self):
-        return self.total_dist / self.total_len
+        return self.total_dist / self.total_len if self.total_len > 0 else 0.0
 
     def reset(self):
         self.total_dist = 0

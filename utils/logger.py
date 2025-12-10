@@ -90,14 +90,13 @@ class HTRLogger:
         # ステップ単位でのlossを記録
         self.writer.add_scalar("train/loss_step", loss, self.global_step)
 
-    def log_epoch(self, epoch, cer, wer, lr=None):
+    def log_epoch(self, epoch, cer, lr=None):
         """エポック終了時のロギング"""
         # エポック平均loss
         avg_loss = self.epoch_loss_sum / max(self.epoch_step_count, 1)
 
         self.writer.add_scalar("train/loss_epoch", avg_loss, epoch)
         self.writer.add_scalar("val/CER", cer, epoch)
-        self.writer.add_scalar("val/WER", wer, epoch)
 
         if lr is not None:
             self.writer.add_scalar("train/learning_rate", lr, epoch)
@@ -107,9 +106,8 @@ class HTRLogger:
 
         return avg_loss
     
-    def log_test(self,epoch,cer,wer):
+    def log_test(self,epoch,cer):
         self.writer.add_scalar("test/CER",cer,epoch)
-        self.writer.add_scalar("test/WER",wer,epoch)
 
     def close(self):
         """ライターをクローズ"""

@@ -1,8 +1,7 @@
-infrom transformers import VisionEncoderDecoderModel
-### small:61596672 parameters
+# VisionEncoderDecoderModelの構成
 ### base :333921792 parameters
 
-
+```
 Model 'VisionEncoderDecoderModel(
   (encoder): ViTModel(
     (embeddings): ViTEmbeddings(
@@ -77,3 +76,4 @@ Model 'VisionEncoderDecoderModel(
     (output_projection): Linear(in_features=1024, out_features=50265, bias=False)
   )
 )' loaded.
+```
