@@ -17,6 +17,7 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 import xlsxwriter
 
 from utils.excels import DiffHighlighter
+from utils.metrics import CER, normalize_36_charset
 
 highlighter = DiffHighlighter()
 
@@ -85,6 +86,8 @@ def export_to_excel(
     gt_text: str,
     pred_base: str,
     pred_ft: str,
+    cer_bs: float,
+    cer_ft: float,
     workbook,
     worksheet,
     row: int,
@@ -108,6 +111,8 @@ def export_to_excel(
         gt_text=gt_text,
         pred_base=pred_base,
         pred_ft=pred_ft,
+        cer_bs=cer_bs,
+        cer_ft=cer_ft,
         mask_gt=mask_gt,
         mask_base=mask_base,
         mask_ft=mask_ft,
@@ -117,6 +122,8 @@ def export_to_excel(
 def main():
     config = parse_args()
     device = config.device if torch.cuda.is_available() else "cpu"
+    cer_metric_FT = CER(normalize_fn=lambda t: normalize_36_charset(t, keep_space=False))
+    cer_metric_BS = CER(normalize_fn=lambda t: normalize_36_charset(t, keep_space=False))
 
     image_dir = Path(config.excel.images_dir)
     exts = config.excel.image_exts.split(",")
@@ -151,16 +158,25 @@ def main():
         pred_base = generate_text(base_processor, base_model, img, device, base_gen_kwargs)
 
         gt_text = labels.get(path.stem, "")
+        cer_metric_FT.update(pred_ft, gt_text)
+        cer_metric_BS.update(pred_base, gt_text)
+        cer_bs = cer_metric_BS.score()
+        cer_ft = cer_metric_FT.score()
 
         export_to_excel(
             img_path=path,
             gt_text=gt_text,
             pred_base=pred_base,
             pred_ft=pred_ft,
+            cer_bs = cer_bs,
+            cer_ft = cer_ft,
             workbook=workbook,
             worksheet=worksheet,
             row=row,
         )
+        
+        cer_metric_BS.reset()
+        cer_metric_FT.reset()
 
         print(f"Image: {path.name}")
         print(f"GT Prediction:  {gt_text}")

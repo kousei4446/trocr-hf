@@ -1,6 +1,5 @@
-"""
-utils.excels の Docstring
-"""
+# utils/excels.py
+
 class DiffHighlighter:
     def __init__(self):
         pass
@@ -74,8 +73,8 @@ class DiffHighlighter:
             cell.value = ch
             if flag and ch not in (" ", "　"):
                 cell.font = font_red
-                
-                
+
+    # ---------- xlsxwriter で 1セルに3行まとめて書く ----------
     def write_three_lines_rich(
         self,
         workbook,
@@ -85,6 +84,8 @@ class DiffHighlighter:
         gt_text: str,
         pred_base: str,
         pred_ft: str,
+        cer_bs: float,
+        cer_ft: float,
         mask_gt,
         mask_base,
         mask_ft,
@@ -92,7 +93,7 @@ class DiffHighlighter:
         """
         1セルに
         GT: xxx
-        BASE: yyy
+        BS: yyy
         FT: zzz
         を改行でまとめ、間違い文字だけ赤文字にする
         """
@@ -109,10 +110,8 @@ class DiffHighlighter:
             pieces.append(label)
 
             if not text:
-                # 空文字ならラベルだけで終わり
                 return
 
-            # マスクに従って、連続した文字をまとめてフォーマット付け
             current_flag = mask[0]
             buf = []
 
@@ -126,7 +125,6 @@ class DiffHighlighter:
                     buf = [ch]
                     current_flag = flag
 
-            # 最後のバッファ
             if buf:
                 fmt = fmt_red if current_flag else fmt_normal
                 pieces.append(fmt)
@@ -136,12 +134,28 @@ class DiffHighlighter:
         add_line("GT: ", gt_text, mask_gt)
         pieces.append("\n")
 
-        # 2行目 BASE
+        # 2行目 BS
         add_line("BS: ", pred_base, mask_base)
         pieces.append("\n")
 
-        # 3行目 FT（最後は改行なし）
+        # 3行目 FT
         add_line("FT: ", pred_ft, mask_ft)
 
-        # 1セルにリッチテキストとして書き込み
+        # テキスト本体
         worksheet.write_rich_string(row, col, *pieces, fmt_cell)
+
+        # ===== 右隣に CER を書く =====
+        fmt_cer_label = workbook.add_format({"bold": True})
+        fmt_cer_cell  = workbook.add_format({"text_wrap": True})
+
+        cer_bs_str = f"{cer_bs:.2%}"
+        cer_ft_str = f"{cer_ft:.2%}"
+
+        cer_pieces = [
+            fmt_cer_label, "BS CER: ",
+            fmt_normal,    cer_bs_str,
+            "\n",
+            fmt_cer_label, "FT CER: ",
+            fmt_normal,    cer_ft_str,
+        ]
+        worksheet.write_rich_string(row, col + 1, *cer_pieces, fmt_cer_cell)
