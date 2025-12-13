@@ -14,7 +14,7 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 from PIL import Image
 import argparse
 import math
-from utils.metrics import CER, WER
+from utils.metrics import CER
 
 from omegaconf import OmegaConf
 
@@ -80,7 +80,7 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
 
     # フォルダ内の画像ファイル一覧を取得（拡張子でフィルタ）
     # フォルダ内 pngのみ対応
-    image_extensions = {'.png'}
+    image_extensions = {'.jpg'}
     image_files = sorted([
         f for f in os.listdir(images_dir)
         if os.path.splitext(f)[1].lower() in image_extensions
@@ -94,7 +94,6 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
 
     # 集計用メトリクス（全体 CER/WER）
     cer_metric = CER()
-    wer_metric = WER(config.eval.wer_mode)
 
     # 生成時のパラメータ（None のものは除外）
     gen_kwargs = {
@@ -138,20 +137,16 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
 
         # 集計メトリクス更新
         cer_metric.update(decoded, gt_text)
-        wer_metric.update(decoded, gt_text)
 
         # サンプル単位の CER/WER を計算（個別保存用）
         sample_cer = CER()
-        sample_wer = WER(config.eval.wer_mode)
         sample_cer.update(decoded, gt_text)
-        sample_wer.update(decoded, gt_text)
 
         results.append({
             'image_id': image_id,
             'gt': gt_text,
             'pred': decoded,
             'cer': sample_cer.score(),
-            'wer': sample_wer.score(),
         })
         print(f"\r[{idx+1}/{len(image_files)}] Processing...", end="", flush=True)
 
@@ -163,7 +158,6 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
     print("=" * 80)
     print(f"Total samples: {len(results)}")
     print(f"Overall CER: {cer_metric.score():.4f}")
-    print(f"Overall WER: {wer_metric.score():.4f}")
 
     # ワースト上位5件（CERの高い順）を表示
     if results:
@@ -175,7 +169,7 @@ def debug_inference_folder(images_dir: str, model_name: str , device=None):
             print(f"  Pred: {r['pred']}")
 
     # 結果リスト、全体 CER、全体 WER を返す
-    return results, cer_metric.score(), wer_metric.score()
+    return results, cer_metric.score()
 
 
 if __name__ == "__main__":      
@@ -185,7 +179,7 @@ if __name__ == "__main__":
     
     # 例外を捕捉して見やすく表示
     try:
-        debug_inference_folder(config.data.test_images_dir, config.model_name,config.device)
+        debug_inference_folder(config.data.train_images_dir, config.excel.ft_ckpt,config.device)
     except Exception as e:
         print("推論デバッグ中にエラーが発生しました:", e)
         raise

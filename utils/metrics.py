@@ -36,6 +36,7 @@ class CER:
         target = self.normalize_fn(target)
         # skip empty targets to avoid zero-length divisions
         if len(target) == 0:
+            print("Warning: empty target encountered in CER calculation; skipping.")
             return
         dist = float(editdistance.eval(prediction, target))
         self.total_dist += dist
