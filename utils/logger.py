@@ -81,14 +81,23 @@ class HTRLogger:
                 items.append((new_key, v))
         return dict(items)
 
-    def log_step(self, loss, epoch, step):
+    def log_step(self, total_loss, epoch, step, main_loss=None, llm_loss=None, llm_loss_layers=None):
         """ステップごとのロギング"""
         self.global_step += 1
-        self.epoch_loss_sum += loss
+        self.epoch_loss_sum += total_loss
         self.epoch_step_count += 1
 
         # ステップ単位でのlossを記録
-        self.writer.add_scalar("train/loss_step", loss, self.global_step)
+        self.writer.add_scalar("train/loss_step_total", total_loss, self.global_step)
+        # 従来互換: loss_step を total としても残す
+        self.writer.add_scalar("train/loss_step", total_loss, self.global_step)
+        if main_loss is not None:
+            self.writer.add_scalar("train/loss_step_main", main_loss, self.global_step)
+        if llm_loss is not None:
+            self.writer.add_scalar("train/llm_loss_step", llm_loss, self.global_step)
+        if llm_loss_layers:
+            for layer, v in llm_loss_layers.items():
+                self.writer.add_scalar(f"train/llm_loss_layer_{layer}", v, self.global_step)
 
     def log_epoch(self, epoch, cer, lr=None):
         """エポック終了時のロギング"""

@@ -4,14 +4,14 @@ device: 'cuda'
 
 # datasets
 data:
-  train_images_dir: 'data/gen_hard/train/images'
-  train_labels_path: 'data/gen_hard/train/labels.txt'
-  val_images_dir: 'data/gen_hard/val/images'
-  val_labels_path: 'data/gen_hard/val/labels.txt'
-  test_images_dir: 'data/gen_hard/test/images'
-  test_labels_path: 'data/gen_hard/test/labels.txt'
-  dummy_images_dir: 'data/gen_hard/dummy/images'
-  dummy_labels_path: 'data/gen_hard/dummy/labels.txt'
+  train_images_dir: 'data/cvl/train/images'
+  train_labels_path: 'data/cvl/train/labels.txt'
+  val_images_dir: 'data/cvl/val/images'
+  val_labels_path: 'data/cvl/val/labels.txt'
+  test_images_dir: 'data/cvl/test/images'
+  test_labels_path: 'data/cvl/test/labels.txt'
+  dummy_images_dir: 'data/cvl/dummy/images'
+  dummy_labels_path: 'data/cvl/dummy/labels.txt'
   image_ext: '.png'
   augmentations:
     enable: false
@@ -24,13 +24,18 @@ data:
 
 
 train:
-  num_epochs: 5
-  batch_size: 12
+  num_epochs: 20
+  batch_size: 1
   num_workers: 4
   lr: 1e-5           
   weight_decay: 0.00005
   save_interval: 10
   eval_interval: 10
+  use_llm : true
+  llm_loss_weight: 0.001
+  llm_model_name: 'meta-llama/Llama-3.2-1B-Instruct'
+  downsample_connector: 2
+  selected_layers: [4,8,12]
 
 # evaluation
 eval:
@@ -40,12 +45,12 @@ eval:
 
 # model saving
 model:
-  save_dir: './saved_models/12-07_gen_hard-small'
+  save_dir: './saved_models/12-07_cvl-small'
   save_interval: 10
 
 # logging
 logging:
-  log_dir: './logs/runs/12-07_gen_hard-small'
+  log_dir: './logs/runs/12-07_cvl-small'
 
 debug:
   save_preprocessed: true
@@ -55,8 +60,8 @@ debug:
   resume: "saved_models/12-13_TOCR-small/epoch-100"
 
 excel:                                                                                                                                                                          
-  images_dir: data/gen_hard]/test/images                                                                                                                                       
-  labels_path: data/gen_hard]/test/labels.txt                                                                                                                                  
+  images_dir: data/cvl]/test/images                                                                                                                                       
+  labels_path: data/cvl]/test/labels.txt                                                                                                                                  
   ft_ckpt: saved_models/12-07_TOCR-small/epoch-1                                                                                                                            
   baseline: microsoft/trocr-small-handwritten                                                                                                                                   
   out: debug/excels/results.xlsx                                                                                                                                                       
