@@ -1,22 +1,30 @@
-model_name: 'microsoft/trocr-small-stage1'
+model_name: 'microsoft/trocr-small-handwritten'
 
 device: 'cuda'
 
 # datasets
 data:
-  train_images_dir: 'data/IAM_Aachen/train/images'
-  train_labels_path: 'data/IAM_Aachen/train/labels.txt'
-  val_images_dir: 'data/IAM_Aachen/val/images'
-  val_labels_path: 'data/IAM_Aachen/val/labels.txt'
-  test_images_dir: 'data/IAM_Aachen/test/images'
-  test_labels_path: 'data/IAM_Aachen/test/labels.txt'
-  dummy_images_dir: 'data/IAM_Aachen/dummy/images'
-  dummy_labels_path: 'data/IAM_Aachen/dummy/labels.txt'
-  image_ext: '.jpg'
+  train_images_dir: 'data/gen_hard/train/images'
+  train_labels_path: 'data/gen_hard/train/labels.txt'
+  val_images_dir: 'data/gen_hard/val/images'
+  val_labels_path: 'data/gen_hard/val/labels.txt'
+  test_images_dir: 'data/gen_hard/test/images'
+  test_labels_path: 'data/gen_hard/test/labels.txt'
+  dummy_images_dir: 'data/gen_hard/dummy/images'
+  dummy_labels_path: 'data/gen_hard/dummy/labels.txt'
+  image_ext: '.png'
+  augmentations:
+    enable: false
+    rotate: {p: 0.5, degrees: 10, fill: 255}
+    gaussian_blur: {p: 0.3, radius_min: 0.5, radius_max: 1.2}
+    dilation: {p: 0.3, size: 3}
+    erosion: {p: 0.3, size: 3}
+    downsample: {p: 0.4, ratio_min: 0.5, ratio_max: 0.8, up_interpolation: bicubic}
+    underline: {p: 0.3, thickness_min: 1, thickness_max: 3, offset_min: 1, offset_max: 5, color: [0, 0, 0]}
 
 
 train:
-  num_epochs: 10
+  num_epochs: 5
   batch_size: 12
   num_workers: 4
   lr: 1e-5           
@@ -32,12 +40,12 @@ eval:
 
 # model saving
 model:
-  save_dir: './saved_models/12-07_TOCR-small'
+  save_dir: './saved_models/12-07_gen_hard-small'
   save_interval: 10
 
 # logging
 logging:
-  log_dir: './logs/runs/12-07_TOCR-small'
+  log_dir: './logs/runs/12-07_gen_hard-small'
 
 debug:
   save_preprocessed: true
@@ -47,8 +55,8 @@ debug:
   resume: "saved_models/12-13_TOCR-small/epoch-100"
 
 excel:                                                                                                                                                                          
-  images_dir: data/IAM_Aachen/test/images                                                                                                                                       
-  labels_path: data/IAM_Aachen/test/labels.txt                                                                                                                                  
+  images_dir: data/gen_hard]/test/images                                                                                                                                       
+  labels_path: data/gen_hard]/test/labels.txt                                                                                                                                  
   ft_ckpt: saved_models/12-07_TOCR-small/epoch-1                                                                                                                            
   baseline: microsoft/trocr-small-handwritten                                                                                                                                   
   out: debug/excels/results.xlsx                                                                                                                                                       

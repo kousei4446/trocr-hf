@@ -154,16 +154,16 @@ if __name__ == "__main__":
     id2gt_val = {iid: txt for (_p, txt, iid) in val_loader.dataset.samples}
     id2gt_test = {iid: txt for (_p, txt, iid) in test_loader.dataset.samples}
     logger = HTRLogger(log_dir=config.logging.log_dir, config=config)
-    cer_test = evaluate(
-        model,
-        processor,
-        test_loader,
-        device,
-        id2gt_test,
-        desc=f"Test epoch {0}",
-    )
-    print(f"Test CER: {cer_test:.4f}")
-    logger.log_test(0, cer_test)
+    # cer_test = evaluate(
+    #     model,
+    #     processor,
+    #     test_loader,
+    #     device,
+    #     id2gt_test,
+    #     desc=f"Test epoch {0}",
+    # )
+    # print(f"Test CER: {cer_test:.4f}")
+    # logger.log_test(0, cer_test)
         
     for epoch in range(1, max_epochs + 1):
         pbar = tqdm(
@@ -200,19 +200,19 @@ if __name__ == "__main__":
             pbar.set_postfix({"loss": f"{(loss_val / step):.4f}"})
             logger.log_step(loss.item(), epoch, step)
             
-        # if epoch % config.train.save_interval == 0:
-        save_model_and_processor(model, processor, optimizer, epoch, config.model.save_dir)
+        if epoch % config.train.save_interval == 0:
+            save_model_and_processor(model, processor, optimizer, epoch, config.model.save_dir)
 
-        # if epoch % config.train.eval_interval == 0 or epoch == 1:
-        cer_test = evaluate(
-            model,
-            processor,
-            test_loader,
-            device,
-            id2gt_test,
-            desc=f"Test epoch {epoch}",
-        )
-        print(f"Test CER: {cer_test:.4f}")
-        logger.log_test(epoch, cer_test)
+        if epoch % config.train.eval_interval == 0 :
+            cer_test = evaluate(
+                model,
+                processor,
+                test_loader,
+                device,
+                id2gt_test,
+                desc=f"Test epoch {epoch}",
+            )
+            print(f"Test CER: {cer_test:.4f}")
+            logger.log_test(epoch, cer_test)
 
     logger.close()
